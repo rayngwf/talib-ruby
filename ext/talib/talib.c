@@ -1,5 +1,6 @@
 #include "ruby.h"
 #include "ta_abstract.h"
+#include <stdio.h>
 
 static VALUE rb_mTaLib;
 static VALUE rb_cTAFunction;
@@ -27,9 +28,11 @@ static VALUE rb_sOutParamInfo;
 #define OUT_CNT 3  // allow up to 3 arrays of outputs
 // combine all heap storage to this struct and free only this on ta_free
 typedef struct _ph {
-	TA_ParamHolder *p;	
+    TA_ParamHolder *p;	
     double* in[IN_CNT];  // johnribera@Hotmail: the usual case (double)
     double* out[OUT_CNT];
+    int in_type[IN_CNT];
+    int out_type[OUT_CNT];
 } ParamHolder;
 
 /* :nodoc: */
@@ -285,6 +288,7 @@ static VALUE ta_func_setup_in_integer(VALUE self, VALUE param_index, VALUE in_ar
 
 	Data_Get_Struct(self, ParamHolder, param_holder);		
 	ret_code = TA_SetInputParamIntegerPtr( param_holder->p, FIX2INT(param_index), (int*)(RARRAY_PTR(in_array)));
+	param_holder->in_type[FIX2INT(param_index)] = TA_Input_Integer;
 	if ( ret_code != TA_SUCCESS )
 		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetInputParamIntegerPtr");
 }
@@ -303,6 +307,7 @@ static VALUE ta_func_setup_in_real(VALUE self, VALUE param_index, VALUE in_array
 	double** dp = param_holder->in;
 	//FIXME: memory leak fixed: johnribera@hotmail.com (see: FL2DBL())
 	ret_code = TA_SetInputParamRealPtr( param_holder->p, FIX2INT(param_index), FLT2DBL(&dp[FIX2INT(param_index)], in_array));
+	param_holder->in_type[FIX2INT(param_index)] = TA_Input_Real;
 	if ( ret_code != TA_SUCCESS )
 		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetInputParamRealPtr");
 }
@@ -314,6 +319,7 @@ static VALUE ta_func_setup_in_price(VALUE self, VALUE param_index, VALUE in_open
     Data_Get_Struct(self, ParamHolder, param_holder);
     double **dp = param_holder->in;
     ret_code = TA_SetInputParamPricePtr( param_holder->p, FIX2INT(param_index), FLT2DBL(&dp[0], in_open), FLT2DBL(&dp[1], in_high), FLT2DBL(&dp[2], in_low), FLT2DBL(&dp[3], in_close), FLT2DBL(&dp[4], in_volume), FLT2DBL(&dp[5], in_oi));
+    param_holder->in_type[FIX2INT(param_index)] = TA_Input_Price;
 	if ( ret_code != TA_SUCCESS )
 		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetInputParamPricePtr");
 }
@@ -368,6 +374,7 @@ static VALUE ta_func_setup_out_real(VALUE self, VALUE param_index, VALUE out_arr
     if (*dp) free(*dp); // not true only 1st time called (reusing same ptrs)
 	*dp = (double*)malloc(RARRAY_LEN(out_array) * sizeof(double));
 	ret_code = TA_SetOutputParamRealPtr(param_holder->p, idx, *dp);
+	param_holder->out_type[FIX2INT(param_index)] = TA_Output_Real;
 	if ( ret_code != TA_SUCCESS )
 		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetOutputParamRealPtr");
 }
@@ -386,6 +393,7 @@ static VALUE ta_func_setup_out_integer(VALUE self, VALUE param_index, VALUE out_
     if (*ip) free(*ip); // not true only very 1st time in
 	*ip = (int*)malloc(RARRAY_LEN(out_array) * sizeof(int));
 	ret_code=TA_SetOutputParamIntegerPtr( param_holder->p, idx, *ip);
+	param_holder->out_type[FIX2INT(param_index)] = TA_Output_Integer;
 	if ( ret_code != TA_SUCCESS )
 		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetOutputParamIntegerPtr");
 }
@@ -414,8 +422,14 @@ static VALUE ta_func_call(VALUE self, VALUE in_start, VALUE in_end)
 			sub_ary = rb_ary_entry(ary, i);
 			for (j=0; j<out_num; j++)
 			{
-				double el = ((double*)param_holder->out[i])[j];
-				rb_ary_store(sub_ary, j+out_start, rb_float_new(el));
+				if(param_holder->out_type[i] == TA_Output_Real) {
+					double el = ((double*)param_holder->out[i])[j];
+					rb_ary_store(sub_ary, j+out_start, rb_float_new(el));
+				}
+				else if(param_holder->out_type[i] == TA_Output_Integer) {
+					int el = ((int*)param_holder->out[i])[j];
+					rb_ary_store(sub_ary, j+out_start, rb_int_new(el));
+				}
 			}
 		}
 	return rb_ary_new3(2, INT2FIX(out_start), INT2FIX(out_num));
