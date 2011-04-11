@@ -20,35 +20,22 @@ a = Array.new
 	p l.out(0)
 end
 
-b = Array.new(3,2)
-l = TaLib::Function.new("CDLDOJI")
+11.times do |i|
+	b = Array.new(20,0)
+	l = TaLib::Function.new("CDLDOJI")
+	#TaLib.set_candle_settings(TaLib::TA_BodyVeryLong, TaLib::TA_RangeType_RealBody, 1, 1.0)
+	#TaLib.set_candle_settings(TaLib::TA_BodyDoji, TaLib::TA_RangeType_HighLow, 10, 0.1)
+	TaLib.restore_candle_default_settings(i)
 
-open =  [rand]*10
-high =  [rand]*10
-low =   [rand]*10
-close = [rand]*10
-vol   = [rand]*10
-oi    = [rand]*10
-open =  [0.81000001]*10
-close = [0.81000001]*10
-high =  [1.0]*10
-low =   [0.7]*10
-vol   = [1.0]*10
-oi    = [1.0]*10
+	open =  [4.80]*20 << 0.80
+	close = [3.99]*20 << 0.81
+	high =  [8.0]*20 << 1.0
+	low =   [0.0]*20 << 0.7
+	vol   = [1.0]*20 << 1.0
+	oi    = [1.0]*20 << 1.0
 
-l.in_price(0, open, high, low, close, vol, oi)
-l.out_int(0,b)
-p l.call(0,0)
-
-p "#####"
-p "#####"
-p "#####"
-p b
-p l.out(0)
-p "#####"
-#p l.in(0)
-#p l.ins()
-#p l.outs()
-#p TaLib.constants.inspect
-
-#TA_SetInputParamPricePtr( param_holder->p, FIX2INT(param_index), FLT2DBL(&dp[0], in_open), FLT2DBL(&dp[1], in_high), FLT2DBL(&dp[2], in_low), FLT2DBL(&dp[3], in_close), FLT2DBL(&dp[4], in_volume), FLT2DBL(&dp[5], in_oi));
+	l.in_price(0, open, high, low, close, vol, oi)
+	l.out_int(0,b)
+	l.call(0,20)
+	p b
+end
