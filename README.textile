@@ -21,8 +21,27 @@ bc. sudo env ARCHFLAGS="-arch PLATFORM" gem install talib_ruby -- --with-talib-i
 * ABSOLUTE_PATH_TO_TALIB_HEADERS = The path to the ta-lib header files (e.g. /opt/local/var/macports/software/ta-lib/0.4.0_0/opt/local/include/ta-lib)
 * ABSOLUTE_PATH_TO_TALIB_LIBS = The path to the ta-lib lib files (e.g. /opt/local/var/macports/software/ta-lib/0.4.0_0/opt/local/lib)
 
+h4. Windows
+
+To install under Windows the ruby development kit is required to build the binary extensions. Download and install instructions can be found at "DevKit":https://github.com/oneclick/rubyinstaller/wiki/Development-Kit:.
+
+Download and extract the ta-lib automake src tarball from "Ta-Lib":http://ta-lib.org/hdr_dw.html: (This procedure was tested with (ta-lib-0.4.0-src.tar.gz)).
+
+From the folder where the ruby devkit was installed double click on msys.bar.
+
+Navigate to the directory where ta-lib source was extracted and type the following to build the library:
+bc. ./configure
+bc. make
+
+Install the ruby wrapper talib_ruby:
+
+bc. gem install talib_ruby -- --with-talib-include=ABSOLUTE_PATH_TO_TALIB_HEADERS  --with-talib-lib=ABSOLUTE_PATH_TO_TALIB_LIBS
+
+* ABSOLUTE_PATH_TO_TALIB_HEADERS = The path to the ta-lib header files (e.g. c:\users\mlamby\downloads\ta-lib-0.4.0-src\include)
+* ABSOLUTE_PATH_TO_TALIB_LIBS = The path to the ta-lib lib files (e.g. c:\users\mlamby\downloads\ta-lib-0.4.0-src\src\.libs)
+
 Now ta-lib can be used by using _require 'talib_ruby'_
-Works on Leopard and Snow Leopard. Has not been tested on Windows.
+Works on Leopard and Snow Leopard, Windows XP and 7. Has not been tested on Vista.
 
 h3. Example
 
