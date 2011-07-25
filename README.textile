@@ -7,6 +7,8 @@ but since it didn't build on my machine and wasn't complete i modified it slight
 
 h3. Install and build instructions
 
+h4. OSX
+
 Install ta-lib from "MacPorts":http://www.macports.org/ports.php?by=name&substr=ta-lib:
 
 bc. sudo port install ta-lib
