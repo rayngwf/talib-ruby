@@ -27,12 +27,12 @@ To install under Windows the ruby development kit is required to build the binar
 
 Download and extract the ta-lib automake src tarball from "Ta-Lib":http://ta-lib.org/hdr_dw.html (This procedure was tested with ta-lib-0.4.0-src.tar.gz).
 
-From the folder where the ruby devkit was installed double click on msys.bat. This will 
+From the folder where the ruby devkit was installed double click on msys.bat.
 
 Navigate to the directory where ta-lib source was extracted (on my system it is '/c/users/mlamby/ta-lib-0.4.0-src')and type the following to build the library:
 
-@  ./configure
-  bc. make@
+bc.  ./configure
+bc.  make
 
 Install the ruby wrapper talib_ruby:
 
