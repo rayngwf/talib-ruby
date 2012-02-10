@@ -1,5 +1,6 @@
 #include "ruby.h"
 #include "ta_abstract.h"
+#include <stdio.h>
 
 static VALUE rb_mTaLib;
 static VALUE rb_cTAFunction;
@@ -27,9 +28,11 @@ static VALUE rb_sOutParamInfo;
 #define OUT_CNT 3  // allow up to 3 arrays of outputs
 // combine all heap storage to this struct and free only this on ta_free
 typedef struct _ph {
-	TA_ParamHolder *p;	
+    TA_ParamHolder *p;	
     double* in[IN_CNT];  // johnribera@Hotmail: the usual case (double)
     double* out[OUT_CNT];
+    int in_type[IN_CNT];
+    int out_type[OUT_CNT];
 } ParamHolder;
 
 /* :nodoc: */
@@ -287,6 +290,7 @@ static VALUE ta_func_setup_in_integer(VALUE self, VALUE param_index, VALUE in_ar
 
 	Data_Get_Struct(self, ParamHolder, param_holder);		
 	ret_code = TA_SetInputParamIntegerPtr( param_holder->p, FIX2INT(param_index), (int*)(RARRAY_PTR(in_array)));
+	param_holder->in_type[FIX2INT(param_index)] = TA_Input_Integer;
 	if ( ret_code != TA_SUCCESS )
 		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetInputParamIntegerPtr");
 }
@@ -305,6 +309,7 @@ static VALUE ta_func_setup_in_real(VALUE self, VALUE param_index, VALUE in_array
 	double** dp = param_holder->in;
 	//FIXME: memory leak fixed: johnribera@hotmail.com (see: FL2DBL())
 	ret_code = TA_SetInputParamRealPtr( param_holder->p, FIX2INT(param_index), FLT2DBL(&dp[FIX2INT(param_index)], in_array));
+	param_holder->in_type[FIX2INT(param_index)] = TA_Input_Real;
 	if ( ret_code != TA_SUCCESS )
 		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetInputParamRealPtr");
 }
@@ -315,16 +320,17 @@ static VALUE ta_func_setup_in_price(VALUE self, VALUE param_index, VALUE in_open
 	ParamHolder *param_holder;
     Data_Get_Struct(self, ParamHolder, param_holder);
     double **dp = param_holder->in;
-    
-    ret_code = TA_SetInputParamPricePtr( 
-        param_holder->p, 
-        FIX2INT(param_index), 
-        FLT2DBL(&dp[0], in_open), 
-        FLT2DBL(&dp[1], in_high), 
-        FLT2DBL(&dp[2], in_low), 
-        FLT2DBL(&dp[3], in_close), 
-        FLT2DBL(&dp[4], in_volume), 
+
+    ret_code = TA_SetInputParamPricePtr(
+        param_holder->p,
+        FIX2INT(param_index),
+        FLT2DBL(&dp[0], in_open),
+        FLT2DBL(&dp[1], in_high),
+        FLT2DBL(&dp[2], in_low),
+        FLT2DBL(&dp[3], in_close),
+        FLT2DBL(&dp[4], in_volume),
         FLT2DBL(&dp[5], in_oi));
+    param_holder->in_type[FIX2INT(param_index)] = TA_Input_Price;
 	if ( ret_code != TA_SUCCESS )
 		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetInputParamPricePtr");
 }
@@ -379,6 +385,7 @@ static VALUE ta_func_setup_out_real(VALUE self, VALUE param_index, VALUE out_arr
     if (*dp) free(*dp); // not true only 1st time called (reusing same ptrs)
 	*dp = (double*)malloc(RARRAY_LEN(out_array) * sizeof(double));
 	ret_code = TA_SetOutputParamRealPtr(param_holder->p, idx, *dp);
+	param_holder->out_type[FIX2INT(param_index)] = TA_Output_Real;
 	if ( ret_code != TA_SUCCESS )
 		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetOutputParamRealPtr");
 }
@@ -397,9 +404,48 @@ static VALUE ta_func_setup_out_integer(VALUE self, VALUE param_index, VALUE out_
     if (*ip) free(*ip); // not true only very 1st time in
 	*ip = (int*)malloc(RARRAY_LEN(out_array) * sizeof(int));
 	ret_code=TA_SetOutputParamIntegerPtr( param_holder->p, idx, *ip);
+	param_holder->out_type[FIX2INT(param_index)] = TA_Output_Integer;
 	if ( ret_code != TA_SUCCESS )
 		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetOutputParamIntegerPtr");
 }
+
+/*
+ *
+ *
+ *
+ */
+
+static VALUE ta_set_candle_settings(VALUE module, VALUE setting_type, VALUE range_type, VALUE avg_period, VALUE factor)
+{
+/*
+ * TA_CandleSettingType settingType, TA_RangeType rangeType, int avgPeriod, double factor
+ */ 
+	
+	TA_RetCode ret_code;
+	ret_code = TA_SetCandleSettings( FIX2INT(setting_type), FIX2INT(range_type), FIX2INT(avg_period), NUM2DBL(factor) );
+	if ( ret_code != TA_SUCCESS )
+		rb_raise(rb_eRuntimeError, "unsuccess return code TA_SetCandleSettings");
+
+	return avg_period;
+}
+
+static VALUE ta_restore_candle_default_settings(VALUE module, VALUE setting_type)
+{
+/*
+ * TA_RetCode TA_RestoreCandleDefaultSettings( TA_CandleSettingType settingType )
+ */ 
+	int settingType = FIX2INT(setting_type);
+	if( settingType > TA_AllCandleSettings )
+		settingType = TA_AllCandleSettings;
+
+	TA_RetCode ret_code;
+	ret_code = TA_RestoreCandleDefaultSettings(settingType);
+	if ( ret_code != TA_SUCCESS )
+		rb_raise(rb_eRuntimeError, "unsuccess return code TA_RestoreCandleDefaultSettings");
+
+	return Qnil;
+}
+
 
 /*
  * call-seq: call(in_start, in_end)
@@ -425,8 +471,14 @@ static VALUE ta_func_call(VALUE self, VALUE in_start, VALUE in_end)
 			sub_ary = rb_ary_entry(ary, i);
 			for (j=0; j<out_num; j++)
 			{
-				double el = ((double*)param_holder->out[i])[j];
-				rb_ary_store(sub_ary, j+out_start, rb_float_new(el));
+				if(param_holder->out_type[i] == TA_Output_Real) {
+					double el = ((double*)param_holder->out[i])[j];
+					rb_ary_store(sub_ary, j+out_start, rb_float_new(el));
+				}
+				else if(param_holder->out_type[i] == TA_Output_Integer) {
+					int el = ((int*)param_holder->out[i])[j];
+					rb_ary_store(sub_ary, j+out_start, rb_int_new(el));
+				}
 			}
 		}
 	return rb_ary_new3(2, INT2FIX(out_start), INT2FIX(out_num));
@@ -464,16 +516,16 @@ void Init_talib()
 	rb_define_const(rb_mTaLib, "TA_IN_PRICE_VOLUME", INT2FIX(TA_IN_PRICE_VOLUME));
 	rb_define_const(rb_mTaLib, "TA_IN_PRICE_OPENINTEREST", INT2FIX(TA_IN_PRICE_OPENINTEREST));
 	rb_define_const(rb_mTaLib, "TA_IN_PRICE_TIMESTAMP", INT2FIX(TA_IN_PRICE_TIMESTAMP));
-  rb_define_const(rb_mTaLib, "TA_OptInput_RealRange", INT2FIX(TA_OptInput_RealRange));
-  rb_define_const(rb_mTaLib, "TA_OptInput_RealList", INT2FIX(TA_OptInput_RealList));
-  rb_define_const(rb_mTaLib, "TA_OptInput_IntegerRange", INT2FIX(TA_OptInput_IntegerRange));
-  rb_define_const(rb_mTaLib, "TA_OptInput_IntegerList", INT2FIX(TA_OptInput_IntegerList));
+	rb_define_const(rb_mTaLib, "TA_OptInput_RealRange", INT2FIX(TA_OptInput_RealRange));
+	rb_define_const(rb_mTaLib, "TA_OptInput_RealList", INT2FIX(TA_OptInput_RealList));
+	rb_define_const(rb_mTaLib, "TA_OptInput_IntegerRange", INT2FIX(TA_OptInput_IntegerRange));
+	rb_define_const(rb_mTaLib, "TA_OptInput_IntegerList", INT2FIX(TA_OptInput_IntegerList));
 	rb_define_const(rb_mTaLib, "TA_OPTIN_IS_PERCENT", INT2FIX(TA_OPTIN_IS_PERCENT));
 	rb_define_const(rb_mTaLib, "TA_OPTIN_IS_DEGREE", INT2FIX(TA_OPTIN_IS_DEGREE));
 	rb_define_const(rb_mTaLib, "TA_OPTIN_IS_CURRENCY", INT2FIX(TA_OPTIN_IS_CURRENCY));
 	rb_define_const(rb_mTaLib, "TA_OPTIN_ADVANCED", INT2FIX(TA_OPTIN_ADVANCED));
-  rb_define_const(rb_mTaLib, "TA_Output_Real", INT2FIX(TA_Output_Real));
-  rb_define_const(rb_mTaLib, "TA_Output_Integer", INT2FIX(TA_Output_Integer));
+	rb_define_const(rb_mTaLib, "TA_Output_Real", INT2FIX(TA_Output_Real));
+	rb_define_const(rb_mTaLib, "TA_Output_Integer", INT2FIX(TA_Output_Integer));
 	rb_define_const(rb_mTaLib, "TA_OUT_LINE", INT2FIX(TA_OUT_LINE));
 	rb_define_const(rb_mTaLib, "TA_OUT_DOT_LINE", INT2FIX(TA_OUT_DOT_LINE));
 	rb_define_const(rb_mTaLib, "TA_OUT_DASH_LINE", INT2FIX(TA_OUT_DASH_LINE));
@@ -487,15 +539,36 @@ void Init_talib()
 	rb_define_const(rb_mTaLib, "TA_OUT_ZERO", INT2FIX(TA_OUT_ZERO));
 	rb_define_const(rb_mTaLib, "TA_OUT_UPPER_LIMIT", INT2FIX(TA_OUT_UPPER_LIMIT));
 	rb_define_const(rb_mTaLib, "TA_OUT_LOWER_LIMIT", INT2FIX(TA_OUT_LOWER_LIMIT));
-  rb_define_const(rb_mTaLib, "TA_MAType_SMA", INT2FIX((int)(TA_MAType_SMA)));
-  rb_define_const(rb_mTaLib, "TA_MAType_EMA", INT2FIX((int)(TA_MAType_EMA)));
-  rb_define_const(rb_mTaLib, "TA_MAType_WMA", INT2FIX((int)(TA_MAType_WMA)));
-  rb_define_const(rb_mTaLib, "TA_MAType_DEMA", INT2FIX((int)(TA_MAType_DEMA)));
-  rb_define_const(rb_mTaLib, "TA_MAType_TEMA", INT2FIX((int)(TA_MAType_TEMA)));
-  rb_define_const(rb_mTaLib, "TA_MAType_TRIMA", INT2FIX((int)(TA_MAType_TRIMA)));
-  rb_define_const(rb_mTaLib, "TA_MAType_KAMA", INT2FIX((int)(TA_MAType_KAMA)));
-  rb_define_const(rb_mTaLib, "TA_MAType_MAMA", INT2FIX((int)(TA_MAType_MAMA)));
-  rb_define_const(rb_mTaLib, "TA_MAType_T3", INT2FIX((int)(TA_MAType_T3)));
+	rb_define_const(rb_mTaLib, "TA_MAType_SMA", INT2FIX((int)(TA_MAType_SMA)));
+	rb_define_const(rb_mTaLib, "TA_MAType_EMA", INT2FIX((int)(TA_MAType_EMA)));
+	rb_define_const(rb_mTaLib, "TA_MAType_WMA", INT2FIX((int)(TA_MAType_WMA)));
+	rb_define_const(rb_mTaLib, "TA_MAType_DEMA", INT2FIX((int)(TA_MAType_DEMA)));
+	rb_define_const(rb_mTaLib, "TA_MAType_TEMA", INT2FIX((int)(TA_MAType_TEMA)));
+	rb_define_const(rb_mTaLib, "TA_MAType_TRIMA", INT2FIX((int)(TA_MAType_TRIMA)));
+	rb_define_const(rb_mTaLib, "TA_MAType_KAMA", INT2FIX((int)(TA_MAType_KAMA)));
+	rb_define_const(rb_mTaLib, "TA_MAType_MAMA", INT2FIX((int)(TA_MAType_MAMA)));
+	rb_define_const(rb_mTaLib, "TA_MAType_T3", INT2FIX((int)(TA_MAType_T3)));
+
+
+	rb_define_const(rb_mTaLib, "TA_BodyLong", INT2FIX((int)(TA_BodyLong)));
+	rb_define_const(rb_mTaLib, "TA_BodyVeryLong", INT2FIX((int)(TA_BodyVeryLong)));
+	rb_define_const(rb_mTaLib, "TA_BodyShort",  INT2FIX((int)(TA_BodyShort)));
+	rb_define_const(rb_mTaLib, "TA_BodyDoji",  INT2FIX((int)(TA_BodyDoji)));
+	rb_define_const(rb_mTaLib, "TA_ShadowLong",  INT2FIX((int)(TA_ShadowLong)));
+	rb_define_const(rb_mTaLib, "TA_ShadowVeryLong",  INT2FIX((int)(TA_ShadowVeryLong)));
+	rb_define_const(rb_mTaLib, "TA_ShadowShort",  INT2FIX((int)(TA_ShadowShort)));
+	rb_define_const(rb_mTaLib, "TA_ShadowVeryShort",  INT2FIX((int)(TA_ShadowVeryShort)));
+	rb_define_const(rb_mTaLib, "TA_Near",  INT2FIX((int)(TA_Near)));
+	rb_define_const(rb_mTaLib, "TA_Far",  INT2FIX((int)(TA_Far)));
+	rb_define_const(rb_mTaLib, "TA_Equal",  INT2FIX((int)(TA_Equal)));
+	rb_define_const(rb_mTaLib, "TA_AllCandleSettings",  INT2FIX((int)(TA_AllCandleSettings)));
+
+	rb_define_const(rb_mTaLib, "TA_RangeType_RealBody",  INT2FIX((int)(TA_RangeType_RealBody)));
+	rb_define_const(rb_mTaLib, "TA_RangeType_HighLow",  INT2FIX((int)(TA_RangeType_HighLow)));
+	rb_define_const(rb_mTaLib, "TA_RangeType_Shadows",  INT2FIX((int)(TA_RangeType_Shadows)));
+
+	rb_define_module_function( rb_mTaLib, "set_candle_settings", ta_set_candle_settings, 4);
+	rb_define_module_function( rb_mTaLib, "restore_candle_default_settings", ta_restore_candle_default_settings, 1);
 
 	rb_struct_define("TA_RealRange", "min", "max", "precision", NULL);
 	rb_struct_define("TA_IntegerRange", "min", "max", NULL );
