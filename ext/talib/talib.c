@@ -21,9 +21,9 @@ static VALUE rb_sOutParamInfo;
 #endif
 
 
-#define TA_INPUT_PARAM	 			1
-#define TA_OPTION_INPUT_PARAM		2
-#define TA_OUTPUT_PARAM 			3
+#define TA_INPUT_PARAM              1
+#define TA_OPTION_INPUT_PARAM       2
+#define TA_OUTPUT_PARAM             3
 #define IN_CNT  7  // allow up to 7 arrays of input
 #define OUT_CNT 3  // allow up to 3 arrays of outputs
 // combine all heap storage to this struct and free only this on ta_free
@@ -151,7 +151,7 @@ void init_tables()
                 TA_FuncTableFree ( function_table );
             }
         }
-        rb_define_class_variable( rb_cTAFunction, "@@groups", 	 rb_group_table );
+        rb_define_class_variable( rb_cTAFunction, "@@groups",    rb_group_table );
         rb_define_class_variable( rb_cTAFunction, "@@functions", rb_function_table );
         TA_GroupTableFree( group_table );
   }
@@ -589,25 +589,26 @@ void Init_talib()
     rb_define_method(rb_cTAFunction, "initialize", ta_func_initialize, 1);
     rb_define_attr(rb_cTAFunction, "result", 1, 1);
 
-    rb_define_module_function( rb_cTAFunction, "groups", 	ta_func_get_groups,    0 );
-    rb_define_module_function( rb_cTAFunction, "functions", ta_func_get_functions, 0 );
+    rb_define_module_function( rb_cTAFunction, "init_tables", init_tables,           0 );
+    rb_define_module_function( rb_cTAFunction, "groups",      ta_func_get_groups,    0 );
+    rb_define_module_function( rb_cTAFunction, "functions",   ta_func_get_functions, 0 );
 
-    rb_define_method( rb_cTAFunction, "ins",  ta_func_get_input_count, 			   0 );
-    rb_define_method( rb_cTAFunction, "outs", ta_func_get_output_count, 		   0 );
-    rb_define_method( rb_cTAFunction, "opts", ta_func_get_option_input_count,      0 );
+    rb_define_method( rb_cTAFunction, "ins",  ta_func_get_input_count,               0 );
+    rb_define_method( rb_cTAFunction, "outs", ta_func_get_output_count,              0 );
+    rb_define_method( rb_cTAFunction, "opts", ta_func_get_option_input_count,        0 );
 
-    rb_define_method( rb_cTAFunction, "in",  ta_func_input_param_info,             1 );
-    rb_define_method( rb_cTAFunction, "opt", ta_func_option_param_info,            1 );
-    rb_define_method( rb_cTAFunction, "out", ta_func_output_param_info,            1 );
+    rb_define_method( rb_cTAFunction, "in",  ta_func_input_param_info,               1 );
+    rb_define_method( rb_cTAFunction, "opt", ta_func_option_param_info,              1 );
+    rb_define_method( rb_cTAFunction, "out", ta_func_output_param_info,              1 );
 
-    rb_define_method( rb_cTAFunction, "in_int",   ta_func_setup_in_integer,        2 );
-    rb_define_method( rb_cTAFunction, "in_real",  ta_func_setup_in_real, 		   2 );
-    rb_define_method( rb_cTAFunction, "in_price", ta_func_setup_in_price,          7 );
-    rb_define_method( rb_cTAFunction, "opt_int",  ta_func_setup_opt_in_integer,    2 );
-    rb_define_method( rb_cTAFunction, "opt_real", ta_func_setup_opt_in_real, 	   2 );
-    rb_define_method( rb_cTAFunction, "out_int",  ta_func_setup_out_integer, 	   2 );
-    rb_define_method( rb_cTAFunction, "out_real", ta_func_setup_out_real, 		   2 );
+    rb_define_method( rb_cTAFunction, "in_int",   ta_func_setup_in_integer,          2 );
+    rb_define_method( rb_cTAFunction, "in_real",  ta_func_setup_in_real,             2 );
+    rb_define_method( rb_cTAFunction, "in_price", ta_func_setup_in_price,            7 );
+    rb_define_method( rb_cTAFunction, "opt_int",  ta_func_setup_opt_in_integer,      2 );
+    rb_define_method( rb_cTAFunction, "opt_real", ta_func_setup_opt_in_real,         2 );
+    rb_define_method( rb_cTAFunction, "out_int",  ta_func_setup_out_integer,         2 );
+    rb_define_method( rb_cTAFunction, "out_real", ta_func_setup_out_real,            2 );
 
-    rb_define_method( rb_cTAFunction, "lookback", ta_func_lookback,                0 );
-    rb_define_method( rb_cTAFunction, "call", ta_func_call,                        2 );
+    rb_define_method( rb_cTAFunction, "lookback", ta_func_lookback,                  0 );
+    rb_define_method( rb_cTAFunction, "call", ta_func_call,                          2 );
 }
